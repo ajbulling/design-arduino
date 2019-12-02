@@ -76,40 +76,79 @@ xf = np.linspace(0.0, 1.0/(2.0*T), N//2)
 
 l2d = plt.plot(xf, 2.0/N * np.abs(yf[0:N//2]))
 
-def duplicate(fqs, i):
+mags = [-1000, -2000, -3000]
+fqs = [-1000, -2000, -3000]
+
+def is_duplicate(current_mag, i):
+	# Loops through the magnitudes/frequencies and replaces them
+	# if a higher magnitude within the range of interval of indexes is found
 	interval = 10
-	if abs(fqs[0] - i) < interval:
-		return True
-	if abs(fqs[1] - i) < interval:
-		return True
-	if abs(fqs[2] - i) < interval:
-		return True
+	for index in range(3):
+		if current_mag > mags[index] and (i - fqs[index]) < interval:
+			'''
+			print("Current mag is " + str(current_mag))
+			print("Current frequency is " + str(i))
+			#print("Saved magnitude is " + str(mags[index]))
+			print("Magnitudes are ", mags)
+			#print("Saved frequency is " + str(fqs[index]))
+			print("Frequencies are ", fqs)
+			print("index is " + str(index))
+			print('\n')
+			if index == 2 and current_mag < mags[1]:
+				mags[index] = current_mag
+				fqs[index] = i
+			elif index == 2 and current_mag < mags[0]:
+			'''
+			return True
+		# Returns true if we see a frequency value close to one of the
+		# saved frequencies but with a lower magnitude, else returns false
+		if (abs(fqs[index] - i) < interval):
+			return True
 	return False
 
 mags = [-1000, -2000, -3000]
 fqs = [-1000, -2000, -3000]
-for i in range(50, 800):
-    if duplicate(fqs, i):
+for i in range(50, 1000):
+    if is_duplicate(l2d[0].get_ydata()[i], i):
 	continue
     if l2d[0].get_ydata()[i] > mags[0]:
+	mags[2] = mags[1]
+	mags[1] = mags[0]
         mags[0] = l2d[0].get_ydata()[i]
 	fqs[2] = fqs[1]
 	fqs[1] = fqs[0]
         fqs[0] = i
     elif l2d[0].get_ydata()[i] > mags[1]: 
+	mags[2] = mags[1]
         mags[1] = l2d[0].get_ydata()[i]
 	fqs[2] = fqs[1]
         fqs[1] = i
-    elif l2d[0].get_ydata()[i] > mags[2] and not duplicate(fqs, i):
+    elif l2d[0].get_ydata()[i] > mags[2]:
         mags[2] = l2d[0].get_ydata()[i]
         fqs[2] = i
-
+print(mags)
 print("Frequency 1 is " + str(fqs[0]))
 print("Frequency 2 is " + str(fqs[1]))
 print("Frequency 3 is " + str(fqs[2]))
 
-peaks, props = signal.find_peaks(l2d[0].get_ydata(), distance=10)
-print(peaks)
+# Data_array is a python list of the data
+data_array = []
+
+# Creates the python list
+for i in range(N // 2):
+	data_array.append(l2d[0].get_ydata()[i])
+
+# mydata is a dictionary of freq:mag pairs
+mydata = {i : data_array[i] for i in range(0, len(data_array))}
+# Sorts based on magnitude
+mydata = sorted(mydata.items(), key = lambda kv:(kv[1], kv[0]))
+# Reverses so largest magnitude comes first
+mydata = list(reversed(mydata))
+for i in range(25):
+	print(mydata[i])
+
+#peaks, props = signal.find_peaks(l2d[0].get_ydata(), distance=10)
+#print(peaks)
 
 plt.grid()
 plt.show()
