@@ -70,9 +70,9 @@ plt.show()
 T = 1.0 / sampleRate
 yf = fft(smooth_data)
 #yf = fft(data)
-xf = np.linspace(0.0, 1.0/(2.0*T), N//2)
-
-l2d = plt.plot(xf, 2.0/sampleRate * np.abs(yf[0:N//2]))
+# Decreasing size by one to avoid spike at zero frequency
+xf = np.linspace(1.0, 1.0/(2.0*T), N//2 - 1)
+l2d = plt.plot(xf, 2.0/sampleRate * np.abs(yf[1:N//2]))
 
 # If you're looking for the code that was here it is now in
 # broken_algorithm.py
@@ -82,7 +82,7 @@ fqs_array = []
 mag_array = []
 
 # Creates the python lists for frequencies and mags
-for i in range(N // 2):
+for i in range(N // 2 - 1):
     fqs_array.append(l2d[0].get_xdata()[i])
     mag_array.append(l2d[0].get_ydata()[i])
 
@@ -103,14 +103,14 @@ fqs_response.pop(0)
 i = 0
 length = len(fqs_response)
 while i < length:
-    if fqs_response[i][0] > 600 or fqs_response[i][0] < 50:
+    if fqs_response[i][0] > 500 or fqs_response[i][0] < 25:
         fqs_response.pop(i)
         length -= 1
     else:
         i += 1
 
 # Remove duplicate frequencies
-interval = 20
+interval = 15
 i = 0
 length = len(fqs_response)
 # Start at first frequency, iterate through all of them (i is iterator)
@@ -137,17 +137,47 @@ print(fqs)
 
 # Find liquid level
 fund_frq = fqs[0]
-if abs(fund_frq - 470) < 15 or abs(fqs[1] - 470) < 15 or abs(fqs[2] - 470) < 15:
+three_fourths_fqs = [225, 325, 128]
+one_half_fqs = [152, 190, 167]
+one_fourth_fqs = [205, 252, 413, 226]
+
+# First index is full keg, last index is empty keg
+count_list = [0, 0, 0, 0, 0]
+lqd_lvl_map = {0 : "100%", 1 : "75%", 2 : "50%", 3 : "25%", 4 : "0%"}
+
+# Figure out most likely liquid level
+for actual_fq in fqs:
+    for expected_fq in three_fourths_fqs:
+        if abs(expected_fq - actual_fq) < 5:
+            count_list[1] += 1
+    for expected_fq in one_half_fqs:
+        if abs(expected_fq - actual_fq) < 5:
+            count_list[2] += 1
+    for expected_fq in one_fourth_fqs:
+        if abs(expected_fq - actual_fq) < 5:
+            count_list[3] += 1
+
+# Take highest count and map to liquid level
+highest_count = 0
+lqd_lvl = ''
+for i in range(len(count_list)):
+    if count_list[i] > highest_count:
+        highest_count = count_list[i]
+        lqd_lvl = lqd_lvl_map[i]
+
+print(lqd_lvl)
+'''
+if abs(fund_frq - 200) < 5:
     print("100%")
-elif abs(fund_frq - 690) < 15:
+elif abs(fund_frq - 225) < 5:
     print("75%")
-elif abs(fund_frq - 755) < 15:
+elif abs(fund_frq - 166) < 5:
     print("50%")
-elif abs(fund_frq - 1130) < 15:
+elif abs(fund_frq - 250) < 5 or abs(fqs[1] -250) < 5:
     print("25%")
 else:
     print("0%")
-
+'''
 '''
 level = 54 # Hard-coded, fix later
 level_file = open('level.txt', 'w')
