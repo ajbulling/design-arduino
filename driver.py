@@ -49,8 +49,7 @@ for i in range(len(data)):
 timeTaken = after - before
 sampleRate = N / timeTaken
 
-print("The total for loop time is: " + str( timeTaken ))
-print("Done")
+#print("The total for loop time is: " + str( timeTaken ))
 log1.close()
 adc.stopContinuousConversion()
 
@@ -88,10 +87,10 @@ for i in range(N // 2 - 1):
 
 # frq_response is a dictionary of freq:mag pairs
 #fqs_response = {i : fqs_array[i] for i in range(0, len(fqs_array))}
-fqs_response = {fqs_array[i] : mag_array[i] for i in range(0, len(fqs_array))}
+fqs_response_dictionary = {fqs_array[i] : mag_array[i] for i in range(0, len(fqs_array))}
 
 # Sorts based on magnitude (returns a list of tuples)
-fqs_response = sorted(fqs_response.items(), key = lambda kv:(kv[1], kv[0]))
+fqs_response = sorted(fqs_response_dictionary.items(), key = lambda kv:(kv[1], kv[0]))
 
 # Reverses so largest magnitude comes first
 fqs_response = list(reversed(fqs_response))
@@ -103,7 +102,7 @@ fqs_response.pop(0)
 i = 0
 length = len(fqs_response)
 while i < length:
-    if fqs_response[i][0] > 500 or fqs_response[i][0] < 25:
+    if fqs_response[i][0] > 500 or fqs_response[i][0] < 100:
         fqs_response.pop(i)
         length -= 1
     else:
@@ -128,18 +127,24 @@ while i < length:
 
 # Take top 3 frequencies
 fqs = []
-for i in range(3):
+mags = []
+for i in range(4):
     if fqs_response[i][1] < 0.15:
         fqs.append(0)
+        mags.append(0)
     else:
         fqs.append(fqs_response[i][0])
+        mags.append(fqs_response[i][1])
 print(fqs)
 
 # Find liquid level
 fund_frq = fqs[0]
-three_fourths_fqs = [225, 325, 128]
-one_half_fqs = [152, 190, 167]
-one_fourth_fqs = [205, 252, 413, 226]
+full_fqs = [197, 104, 134, 283, 269, 499, 399]
+#full_fqs = [117, 269, 357]
+three_fourths_fqs = [225,154, 325, 127, 443, 117, 294]
+one_half_fqs = [152, 190, 167, 400]
+one_fourth_fqs = [207, 252, 413, 226, 337 , 384]
+empty_fqs = [260, 370, 432]
 
 # First index is full keg, last index is empty keg
 count_list = [0, 0, 0, 0, 0]
@@ -147,24 +152,46 @@ lqd_lvl_map = {0 : "100%", 1 : "75%", 2 : "50%", 3 : "25%", 4 : "0%"}
 
 # Figure out most likely liquid level
 for actual_fq in fqs:
+    for expected_fq in full_fqs:
+        if abs(expected_fq - actual_fq) < 5:
+            count_list[0] += fqs_response_dictionary[actual_fq]
     for expected_fq in three_fourths_fqs:
         if abs(expected_fq - actual_fq) < 5:
-            count_list[1] += 1
+            count_list[1] += fqs_response_dictionary[actual_fq]
     for expected_fq in one_half_fqs:
         if abs(expected_fq - actual_fq) < 5:
-            count_list[2] += 1
+            count_list[2] += fqs_response_dictionary[actual_fq]
     for expected_fq in one_fourth_fqs:
         if abs(expected_fq - actual_fq) < 5:
-            count_list[3] += 1
+            count_list[3] += fqs_response_dictionary[actual_fq]
+    for expected_fq in empty_fqs:
+        if abs(expected_fq - actual_fq) < 5:
+            count_list[4] += fqs_response_dictionary[actual_fq]
 
 # Take highest count and map to liquid level
 highest_count = 0
 lqd_lvl = ''
 for i in range(len(count_list)):
-    if count_list[i] > highest_count:
+    if count_list[i] >= highest_count:
         highest_count = count_list[i]
         lqd_lvl = lqd_lvl_map[i]
 
+#Removes 1/2, 3/4, and Full from the possibilities of being chosen
+if highest_count < 1:
+    if count_list[3] > count_list[4]:
+        lqd_lvl = lqd_lvl_map[3]
+    else:
+        lqd_lvl = lqd_lvl_map[4]
+        # If no good frequency data, must be an empty keg
+'''
+empty_count = 0
+for each in mags:
+    if each < 1:
+        empty_count += 1
+if empty_count == 3:
+    lqd_lvl = "0%"
+'''
+print("Confidence: " + str(highest_count))
 print(lqd_lvl)
 '''
 if abs(fund_frq - 200) < 5:
