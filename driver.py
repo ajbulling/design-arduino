@@ -7,6 +7,7 @@ import scipy.signal as signal
 import numpy as np
 import scipy as sp
 import datetime
+import os
 
 GPIO.setmode(GPIO.BCM)
 GPIO.setwarnings(False)
@@ -18,7 +19,7 @@ samples = [3300, 2400, 1600, 920, 490, 250, 128]
 pga = gains[2]
 sps = samples[0]
 adc = ADS1x15(ic = 0x00, debug=True)
-N = sps * 4
+N = sps * 4 # N is number of samples
 data = []
 
 mytime = datetime.datetime.now().strftime("%m-%d:%H:%M:%S")
@@ -29,6 +30,7 @@ log2 = open('log_filtered/' + filename, 'w')
 #adc.startContinuousDifferentialConversion(0, 1, pga, sps)
 adc.startContinuousConversion(0, pga, sps)
 
+#Activate solenoid
 GPIO.output(23, GPIO.HIGH)
 time.sleep(0.1)
 GPIO.output(23, GPIO.LOW)
@@ -60,12 +62,15 @@ smooth_data = signal.filtfilt(B,A, data[:len(data)//2])
 
 t = np.arange(len(data)//2)
 
+# Plot unfiltered data
 plt.plot(t, data[:len(data)//2])
 plt.show()
 
+# Plot filtered data
 #plt.plot(t, smooth_data, 'b-')
 #plt.show()
 
+# Perform FFT
 T = 1.0 / sampleRate
 yf = fft(smooth_data)
 #yf = fft(data)
@@ -76,16 +81,15 @@ l2d = plt.plot(xf, 2.0/sampleRate * np.abs(yf[1:N//2]))
 # If you're looking for the code that was here it is now in
 # broken_algorithm.py
 
-# fqs_array is a python list of the data
 fqs_array = []
 mag_array = []
 
-# Creates the python lists for frequencies and mags
+# Populates the lists with frequency and magnitude data
 for i in range(N // 2 - 1):
     fqs_array.append(l2d[0].get_xdata()[i])
     mag_array.append(l2d[0].get_ydata()[i])
 
-# frq_response is a dictionary of freq:mag pairs
+# fqs_response_dictionary is a dictionary of freq:mag pairs
 #fqs_response = {i : fqs_array[i] for i in range(0, len(fqs_array))}
 fqs_response_dictionary = {fqs_array[i] : mag_array[i] for i in range(0, len(fqs_array))}
 
@@ -98,7 +102,7 @@ fqs_response = list(reversed(fqs_response))
 # Remove first tuple (0 frequency)
 fqs_response.pop(0)
 
-# Filter out mirrored frequency data
+# Filter out "mirrored" frequency data
 i = 0
 length = len(fqs_response)
 while i < length:
@@ -109,7 +113,7 @@ while i < length:
         i += 1
 
 # Remove duplicate frequencies
-interval = 15
+interval = 15 # If within 15 Hz, ignore
 i = 0
 length = len(fqs_response)
 # Start at first frequency, iterate through all of them (i is iterator)
@@ -125,20 +129,22 @@ while i < length:
             j += 1
     i += 1
 
-# Take top 3 frequencies
+# Grab top 3 frequencies and magnitudes
 fqs = []
 mags = []
 for i in range(4):
+    # Ignore all data with magnitude less than 0.15
     if fqs_response[i][1] < 0.15:
         fqs.append(0)
         mags.append(0)
     else:
         fqs.append(fqs_response[i][0])
         mags.append(fqs_response[i][1])
+print("Found frequencies:")
 print(fqs)
 
 # Find liquid level
-fund_frq = fqs[0]
+# Expected frequency values for various kegs
 full_fqs = [197, 104, 134, 283, 269, 499, 399]
 #full_fqs = [117, 269, 357]
 three_fourths_fqs = [225,154, 325, 127, 443, 117, 294]
@@ -147,71 +153,62 @@ one_fourth_fqs = [207, 252, 413, 226, 337 , 384]
 empty_fqs = [260, 370, 432]
 
 # First index is full keg, last index is empty keg
-count_list = [0, 0, 0, 0, 0]
+mag_list = [0, 0, 0, 0, 0]
+# Mapping of indices to levels for mag_list
 lqd_lvl_map = {0 : "100%", 1 : "75%", 2 : "50%", 3 : "25%", 4 : "0%"}
 
 # Figure out most likely liquid level
 for actual_fq in fqs:
     for expected_fq in full_fqs:
         if abs(expected_fq - actual_fq) < 5:
-            count_list[0] += fqs_response_dictionary[actual_fq]
+            mag_list[0] += fqs_response_dictionary[actual_fq]
     for expected_fq in three_fourths_fqs:
         if abs(expected_fq - actual_fq) < 5:
-            count_list[1] += fqs_response_dictionary[actual_fq]
+            mag_list[1] += fqs_response_dictionary[actual_fq]
     for expected_fq in one_half_fqs:
         if abs(expected_fq - actual_fq) < 5:
-            count_list[2] += fqs_response_dictionary[actual_fq]
+            mag_list[2] += fqs_response_dictionary[actual_fq]
     for expected_fq in one_fourth_fqs:
         if abs(expected_fq - actual_fq) < 5:
-            count_list[3] += fqs_response_dictionary[actual_fq]
+            mag_list[3] += fqs_response_dictionary[actual_fq]
     for expected_fq in empty_fqs:
         if abs(expected_fq - actual_fq) < 5:
-            count_list[4] += fqs_response_dictionary[actual_fq]
+            mag_list[4] += fqs_response_dictionary[actual_fq]
 
 # Take highest count and map to liquid level
 highest_count = 0
 lqd_lvl = ''
-for i in range(len(count_list)):
-    if count_list[i] >= highest_count:
-        highest_count = count_list[i]
+for i in range(len(mag_list)):
+    if mag_list[i] >= highest_count:
+        highest_count = mag_list[i]
         lqd_lvl = lqd_lvl_map[i]
 
-#Removes 1/2, 3/4, and Full from the possibilities of being chosen
+# Removes 1/2, 3/4, and Full from the possibilities of being chosen
+# if magnitude is less than 1 (less than half)
 if highest_count < 1:
-    if count_list[3] > count_list[4]:
+    if mag_list[3] > mag_list[4]:
         lqd_lvl = lqd_lvl_map[3]
     else:
         lqd_lvl = lqd_lvl_map[4]
-        # If no good frequency data, must be an empty keg
-'''
-empty_count = 0
-for each in mags:
-    if each < 1:
-        empty_count += 1
-if empty_count == 3:
-    lqd_lvl = "0%"
-'''
-print("Confidence: " + str(highest_count))
-print(lqd_lvl)
-'''
-if abs(fund_frq - 200) < 5:
-    print("100%")
-elif abs(fund_frq - 225) < 5:
-    print("75%")
-elif abs(fund_frq - 166) < 5:
-    print("50%")
-elif abs(fund_frq - 250) < 5 or abs(fqs[1] -250) < 5:
-    print("25%")
-else:
-    print("0%")
-'''
-'''
-level = 54 # Hard-coded, fix later
+
+print("Magnitude sum: " + str(highest_count))
+print("Liquid level: " + lqd_lvl)
+
+# Write liquid level to file
 level_file = open('level.txt', 'w')
-level_file.write(str(level))
-os.system("curl --upload-file level.txt 68.180.48.172:8000")
+level_file.write(str(lqd_lvl))
 level_file.close()
-'''
+
+# Upload level to the http server (remove -s for more verbose output)
+os.system("curl -s --upload-file level.txt 68.180.48.172:8000")
+
+# Write over file to give a "clean slate" for next time
+level_file = open('level.txt', 'w')
+level_file.seek(0)
+level_file.write("    ")
+level_file.close()
+
+# Show FFT
 plt.grid()
 plt.show()
 
