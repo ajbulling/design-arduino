@@ -1,4 +1,4 @@
-from Adafruit_ADS1x15 import ADS1x15
+import Adafruit_MCP3008
 import RPi.GPIO as GPIO
 import time
 from scipy.fftpack import fft
@@ -9,6 +9,7 @@ import scipy as sp
 import datetime
 import os
 
+# Set up GPIO pin for the solenoid
 GPIO.setmode(GPIO.BCM)
 GPIO.setwarnings(False)
 GPIO.setup(23, GPIO.OUT)
@@ -18,19 +19,24 @@ gains = [6144, 4096, 2048, 1024, 512, 256]
 samples = [3300, 2400, 1600, 920, 490, 250, 128]
 pga = gains[2]
 sps = samples[0]
-adc = ADS1x15(ic = 0x00, debug=True)
 N = sps * 4 # N is number of samples
 data = []
 
+# Software SPI configuration
+CLK = 18
+MISO = 23
+MOSI = 24
+CS = 25
+channel = 0
+adc = Adafruit_MCP3008.MCP3008(clk=CLK,cs=CS,miso=MISO,mosi=MOSI)
+
+# Open log files with a timestamp
 mytime = datetime.datetime.now().strftime("%m-%d:%H:%M:%S")
 filename = str(mytime) + '.txt'
 log1 = open('log_unfiltered/' + filename, 'w')
 log2 = open('log_filtered/' + filename, 'w')
 
-#adc.startContinuousDifferentialConversion(0, 1, pga, sps)
-adc.startContinuousConversion(0, pga, sps)
-
-#Activate solenoid
+# Activate solenoid
 GPIO.output(23, GPIO.HIGH)
 time.sleep(0.1)
 GPIO.output(23, GPIO.LOW)
@@ -39,7 +45,8 @@ time.sleep(0.35)
 before = time.time()
 # Start collecting data
 for num in range (N):
-    a = adc.getLastConversionResults()
+    # Read current value of the ADC at specified channel
+    a = adc.read_adc(channel)
     data.append(a)
 after = time.time()
 '''
@@ -53,7 +60,6 @@ sampleRate = N / timeTaken
 
 #print("The total for loop time is: " + str( timeTaken ))
 log1.close()
-adc.stopContinuousConversion()
 
 filt_N = 1 #Filter order
 Wn = 0.5  #cutoff frequency
