@@ -12,8 +12,8 @@ import os
 # Set up GPIO pin for the solenoid
 GPIO.setmode(GPIO.BCM)
 GPIO.setwarnings(False)
-GPIO.setup(23, GPIO.OUT)
-GPIO.output(23, GPIO.LOW)
+GPIO.setup(17, GPIO.OUT)
+GPIO.output(17, GPIO.LOW)
 
 gains = [6144, 4096, 2048, 1024, 512, 256]
 samples = [3300, 2400, 1600, 920, 490, 250, 128]
@@ -23,23 +23,23 @@ N = sps * 4 # N is number of samples
 data = []
 
 # Software SPI configuration
-CLK = 18
-MISO = 23
-MOSI = 24
-CS = 25
+CLK = 24
+MISO = 11
+MOSI = 8
+CS = 21
 channel = 0
 adc = Adafruit_MCP3008.MCP3008(clk=CLK,cs=CS,miso=MISO,mosi=MOSI)
 
 # Open log files with a timestamp
-mytime = datetime.datetime.now().strftime("%m-%d:%H:%M:%S")
-filename = str(mytime) + '.txt'
-log1 = open('log_unfiltered/' + filename, 'w')
-log2 = open('log_filtered/' + filename, 'w')
+#mytime = datetime.datetime.now().strftime("%m-%d:%H:%M:%S")
+#filename = str(mytime) + '.txt'
+#log1 = open('log_unfiltered/' + filename, 'w')
+#log2 = open('log_filtered/' + filename, 'w')
 
 # Activate solenoid
-GPIO.output(23, GPIO.HIGH)
+GPIO.output(17, GPIO.HIGH)
 time.sleep(0.1)
-GPIO.output(23, GPIO.LOW)
+GPIO.output(17, GPIO.LOW)
 time.sleep(0.35)
 
 before = time.time()
@@ -59,7 +59,7 @@ timeTaken = after - before
 sampleRate = N / timeTaken
 
 #print("The total for loop time is: " + str( timeTaken ))
-log1.close()
+#log1.close()
 
 filt_N = 1 #Filter order
 Wn = 0.5  #cutoff frequency
@@ -112,14 +112,14 @@ fqs_response.pop(0)
 i = 0
 length = len(fqs_response)
 while i < length:
-    if fqs_response[i][0] > 500 or fqs_response[i][0] < 100:
+    if fqs_response[i][0] > 1500 or fqs_response[i][0] < 10:
         fqs_response.pop(i)
         length -= 1
     else:
         i += 1
 
 # Remove duplicate frequencies
-interval = 15 # If within 15 Hz, ignore
+interval = 3 # If within 15 Hz, ignore
 i = 0
 length = len(fqs_response)
 # Start at first frequency, iterate through all of them (i is iterator)
@@ -153,9 +153,9 @@ print(fqs)
 # Expected frequency values for various kegs
 full_fqs = [197, 104, 134, 283, 269, 499, 399]
 #full_fqs = [117, 269, 357]
-three_fourths_fqs = [225,154, 325, 127, 443, 117, 294]
-one_half_fqs = [152, 190, 167, 400]
-one_fourth_fqs = [207, 252, 413, 226, 337 , 384]
+three_fourths_fqs = [30, 92]
+one_half_fqs = [88, 30]
+one_fourth_fqs = [30, 85]
 empty_fqs = [260, 370, 432]
 
 # First index is full keg, last index is empty keg
@@ -166,19 +166,19 @@ lqd_lvl_map = {0 : "100%", 1 : "75%", 2 : "50%", 3 : "25%", 4 : "0%"}
 # Figure out most likely liquid level
 for actual_fq in fqs:
     for expected_fq in full_fqs:
-        if abs(expected_fq - actual_fq) < 5:
+        if abs(expected_fq - actual_fq) < 2:
             mag_list[0] += fqs_response_dictionary[actual_fq]
     for expected_fq in three_fourths_fqs:
-        if abs(expected_fq - actual_fq) < 5:
+        if abs(expected_fq - actual_fq) < 2:
             mag_list[1] += fqs_response_dictionary[actual_fq]
     for expected_fq in one_half_fqs:
-        if abs(expected_fq - actual_fq) < 5:
+        if abs(expected_fq - actual_fq) < 2:
             mag_list[2] += fqs_response_dictionary[actual_fq]
     for expected_fq in one_fourth_fqs:
-        if abs(expected_fq - actual_fq) < 5:
+        if abs(expected_fq - actual_fq) < 2:
             mag_list[3] += fqs_response_dictionary[actual_fq]
     for expected_fq in empty_fqs:
-        if abs(expected_fq - actual_fq) < 5:
+        if abs(expected_fq - actual_fq) < 2:
             mag_list[4] += fqs_response_dictionary[actual_fq]
 
 # Take highest count and map to liquid level
@@ -201,9 +201,11 @@ print("Magnitude sum: " + str(highest_count))
 print("Liquid level: " + lqd_lvl)
 
 # Write liquid level to file
-level_file = open('level.txt', 'w')
-level_file.write(str(lqd_lvl))
-level_file.close()
+#level_file = open('level.txt', 'w')
+#level_file.write(str(lqd_lvl))
+#level_file.close()
+
+GPIO.cleanup()
 
 # Upload level to the http server (remove -s for more verbose output)
 os.system("curl -s --upload-file level.txt 68.180.48.172:8000")
